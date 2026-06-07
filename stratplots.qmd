@@ -1,0 +1,89 @@
+---
+title: "Accessing Paleoecological Data with neotoma2"
+subtitle: "PalaeOpen Training School — Sofia, 15–18 June 2026"
+author: "Xavier Benito"
+execute: 
+  echo: true
+  warning: false
+  message: false
+  error: false
+format:
+  html:
+    toc: true #table of contents
+    toc-location: right
+    date-format: long
+    date-modified: last-modified
+    code-copy: true
+    code-fold: show
+    code-line-numbers: true
+    theme: flatly
+    embed-resources: true #to allow portability of html files
+---
+
+# 1. Workshop overview and objectives
+
+This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with an overview of the `neotoma2` R package and its use in obtaining and analysing data from the Neotoma Paleoecology Database.
+
+The workshop combines short conceptual explanations with guided coding exercises using R. We will be using:
+
+-   **Prášilské Lake** `Neotoma site ID 26991` [link](https://apps.neotomadb.org/explorer/?siteids=26991)
+-   Available datasets for the site: **Pollen**, **diatoms**, **chironomids** & **charcoal**
+
+## Learning Objectives
+
+1.  Understand the basic data structure within the `neotoma2` R package
+7.  Build reproducible workflows using Quarto
+
+## Online resources
+
+1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool)
+2.  [Neotoma Palaeoecology Database Manual](https://open.neotomadb.org/manual/)
+3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2 (including previous Neotoma workshop repositories)
+4.  [PalaeOpen R Zulip channel](https://palaeopen.zulipchat.com/#narrow/channel/540741-it_r)
+5.  [Neotoma Slack channel](https://neotomadb.slack.com/join/shared_invite/zt-cvsv53ep-wjGeCTkq7IhP6eUNA9NxYQ#/shared-invite/email) 
+
+## Install and load the necessary packages
+
+This workflow relies on different R libraries, including tidyverse, geojsonsf and leaflet, to handle geographic data and interactive mapping. To streamline the setup, we utilize the pacman management tool. If any required package is missing from your local environment, pacman will automatically download and install it before loading.
+
+```{r}
+# Clean workspace first
+rm(list = ls())
+install.packages("pacman") #install the package to load the necessary packages
+pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx)
+```
+
+# Stratigraphic plot
+There exists several packages to perform stratigraphic diagrams of your data. The data needs to be on long or wide format as a funciton of the package used:
+
+| Package | Data structure | function |
+| --------- | ----------- | ----------- |
+| *ggplot2* | long format | `ggplot()`|
+| *tidypaleo* | long format | `Stratiplot()`|
+| *analogue* | wide format | `ggplot()`|
+| *rioja* | wide format | `strat.plot()`|
+| *riojaPlot* | wide format | `riojaPlot()`|
+
+Here we use the `rioja` package and the `strat.plot` function:
+
+```{r}
+# subset the most frequent taxa from the pollen wide-format matrix
+df_subset <- site_pollen_wide[,-1:-2] %>% 
+  select(any_of(pra_plot_taxa$variablename))
+
+rioja::strat.plot(df_subset*100, yvar = site_pollen_wide$age,
+                          ylabel = "Calibrated Years BP",
+                          xlabel = "Diatom (%)",
+                          y.rev = TRUE,
+                          wa.order = "topleft", scale.percent = TRUE)
+
+```
+
+
+
+
+
+
+
+
+

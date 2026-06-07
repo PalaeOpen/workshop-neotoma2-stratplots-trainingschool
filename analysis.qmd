@@ -1,0 +1,252 @@
+---
+title: "Simple analysis workflow"
+subtitle: "PalaeOpen Training School — Sofia, 15–18 June 2026"
+author: "Xavier Benito"
+execute: 
+  echo: true
+  warning: false
+  message: false
+  error: false
+format:
+  html:
+    toc: true #table of contents
+    toc-location: right
+    date-format: long
+    date-modified: last-modified
+    code-copy: true
+    code-fold: show
+    code-line-numbers: true
+    theme: flatly
+    embed-resources: true #to allow portability of html files
+---
+
+# 1. Workshop overview and objectives
+
+This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with a simple analysis workflow using `neotoma2` 
+
+## Learning Objectives
+
+1.  Perform basic taxonomic harmonization
+2.  Make a simple analyses of spatial distribution of taxa over time
+3.  Conduct large-scale analyses of taxa distribution against raster data
+4.  Build reproducible workflows using Quarto
+
+## Online resources
+
+1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-stratplots-trainingschool)
+2.  [Neotoma Palaeoecology Database Manual](https://open.neotomadb.org/manual/)
+3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2 (including previous Neotoma workshop repositories)
+4.  [PalaeOpen R Zulip channel](https://palaeopen.zulipchat.com/#narrow/channel/540741-it_r)
+5.  [Neotoma Slack channel](https://neotomadb.slack.com/join/shared_invite/zt-cvsv53ep-wjGeCTkq7IhP6eUNA9NxYQ#/shared-invite/email) 
+
+## Install and load the necessary packages
+
+This workflow relies on different R libraries, including tidyverse, geojsonsf and leaflet, to handle geographic data and interactive mapping. To streamline the setup, we utilize the pacman management tool. If any required package is missing from your local environment, pacman will automatically download and install it before loading.
+
+```{r}
+# Clean workspace first
+rm(list = ls())
+install.packages("pacman") #install the package to load the necessary packages
+pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx)
+```
+
+# Working with Sites
+
+`sites` are spatial objects in `neotoma2` Sites have names, locations, and are found within the context of geopolitical units, but within the API and the package, the site itself does not have associated information about taxa, dataset types or ages. It is simply the container into which we add that information. So, when we search for sites we can search by:
+
+| Parameter | Description |
+| --------- | ----------- |
+| sitename | A valid site name (case insensitive) using `%` as a wildcard. |
+| siteid | A unique numeric site id from the Neotoma Database |
+| loc | A bounding box vector, geoJSON or WKT string. |
+| altmin | Lower altitude bound for sites. |
+| altmax | Upper altitude bound for site locations. |
+| database | The constituent database from which the records are pulled. |
+| datasettype | The kind of dataset (see `get_table(datasettypes)`) |
+| datasetid | Unique numeric dataset identifier in Neotoma |
+| doi | A valid dataset DOI in Neotoma |
+| gpid | A unique numeric identifier, or text string identifying a geopolitical unit in Neotoma |
+| keywords | Unique sample keywords for records in Neotoma. |
+| contacts | A name or numeric id for individuals associuated with sites. |
+| taxa | Unique numeric identifiers or taxon names associated with sites. |
+| ageyoung | A minimum spanning age for the record, in years before radiocarbon present (1950). |
+| ageold | A maximum spanning age for the record, in years before radiocarbon present (1950). |
+| ageof | An age which must be contained within the range of sample ages for a site. |
+
+Let's locate diatom datasets in Europe:
+```{r}
+europe <- list(geoJSON = '{"type": "Polygon",
+        "coordinates": [[
+            [-30, 30],
+            [70, 30],
+            [70, 90],
+            [-30, 90],
+            [-30, 30]]]}')
+
+diatom_sites <- get_sites(datasettype="diatom", loc=europe$geoJSON) #if all_data = TRUE all available records will be queried.
+neotoma2::plotLeaflet(diatom_sites)
+#neotoma2::summary(diatom_sites)
+```
+
+There seems to be some marine sites in the Europe's diatom site list. Let's have a look at the description field of each site:
+```{r}
+locs <- list()
+for (i in 1:length(diatom_sites)) {
+  locs[i] <- diatom_sites[[i]]$description
+  names(locs)[i] <- diatom_sites[[i]]$sitename
+  
+}
+names(locs)
+```
+
+However, we have NAs for all the sites' description so we need to remove them manually.
+```{r}
+marine_sites_vec <- c(30451,30452,30453,30454,30614, 30983) #we define first the vector with the siteid
+diatom_cont_sites <- diatom_sites %>% 
+  neotoma2::filter(!siteid %in% marine_sites_vec)
+```
+
+# Working with datasets
+
+A `sites` object contains `collectionunits` which contain `datasets`. From the table above we can see that some of the sites we have looked at contain different `dataset` types. We can also see that for each site, different `collectionunits` (i.e., usually cores) can be found. 
+
+Having a `sites` object we can directly call `get_datasets()` to pull in more metadata about the datasets. At any time we can use `datasets()` to get more information about any datasets that a sites object may contain. Below we compare the output of `datasets(bulgaria_sites)` to the output of a similar call using the following:
+
+```{r}
+datasets(diatom_cont_sites)
+diatom_datasets <- get_datasets(diatom_cont_sites)
+neotoma2::summary(diatom_datasets)
+
+```
+
+# Working with samples
+
+Functions like `get_sites()` or `get_datasets()` only pull down high-level metadata (site names, geographic coordinates, dataset IDs, etc) to keep things fast and avoid large files quering the API. To populate that object with the detailed data—like analysis units, sample depth, chronologies, and taxon counts, we need to pass it into the `get_downloads()` function.
+
+```{r}
+diatom_data <- diatom_datasets %>%
+  neotoma2::get_downloads()
+
+diatom_data # returns the sites information
+neotoma2::cite_data(diatom_data)
+```
+
+In case the Neotoma API doesn't work, we have already downloaded and saved the site data
+```{r}
+## The line is commented because there is no need for you to run it
+saveRDS(diatom_data, "data/diatom_download.RDS")
+```
+
+To extract all the samples we need to run the funcion `samples()`
+```{r}
+#diatom_data <- readRDS("data/diatom_download.RDS") #uncomment if you need to read in the downloaded object 
+diat_samples <- samples(diatom_data)
+names(diat_samples)
+```
+
+# Simple taxonomic harmonization
+Diatoms are notorious for their species-rich fossil assemblages and convoluted taxonomy characterized by constant nomenclature changes and taxa having different synonyms for the same species.
+
+If you want to know what diatom taxa we have in the samples, you can use the function `taxa()` on the downloaded data object. This is basically the samples table with information about how many samples the taxon occurs, and in how many sites.
+
+```{r}
+diatom_taxa <- neotoma2::taxa(diatom_data)
+head(diatom_taxa) #have a look at the diatom taxon table
+```
+
+Let's say we want all samples from which *Achnanthidium minutissimum* and its related taxa (*Achnanthes minutissima*, *Achnanthidium minutissimum s.l.*) and also uncertain taxa (*Achnanthidium cf. A. minutissimum*) have been reported to be grouped together into one taxon called *Achnanthidium minutissimum*. There are several ways of doing this, either directly by exporting the file and editing each individual cell, or by creating an external “harmonization” table.
+
+```{r}
+# Save the taxon list with a .csv file so we can edit it subsequently, for instance to add diatom traits or other fine-tuning taxonomic harmonization
+openxlsx::write.xlsx(diatom_taxa, "data/diatomtaxontable.csv")
+```
+
+We can harmonize taxon by taxon using matching and transformation. We use `dplyr` type coding here to `mutate()` the column `variablename` so that any time we detect (`str_detect()`) a `variablename` that has *minutissima* we replace() it with the character string "Achnanthidium minutissimum". 
+
+```{r}
+taxon_detect <- "minutissimum"
+diatom_taxa %>% #how many different diatom taxa have "minutissimum"
+  filter(str_detect(variablename, taxon_detect)) %>% 
+  pull(variablename) %>% unique()
+```
+
+First, we are going to filter the ecological groups to include only DIAT (diatom) and then replace the diatom name changed.
+```{r}
+diat_samples_harm <- diat_samples %>% 
+  dplyr::filter(ecologicalgroup == "DIAT") %>% #we filter by diatoms because there might exists other taxa in the datasets that have "minutissimum" as name. This would also allow us to ignore things that might skew our diatom sums, for instance cysts
+  mutate(variablename = replace(variablename, 
+                                stringr::str_detect(variablename, taxon_detect), 
+                                "Achnanthidium minutissimum"))
+```
+
+Imagine now that we are interested in harmonizing the European diatom taxon list by genus. To do that we apply `stringr::word()` to isolate the first word. 
+```{r}
+diat_samples_genus_harm <- diat_samples %>%
+    dplyr::filter(ecologicalgroup == "DIAT") %>% #we filter by diatoms only
+    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), #rmeove designations like "Unknown diatom" or cf. variants (e.g., "cf. Navicula"), otherwise taking the first word will result in a genus named "Unknown" or "cf."
+         genus = word(cleaned_name, 1)) 
+```
+
+Once having created a new grouping variable called **genus** we want to aggregate the counts
+```{r}
+diat_samples_genus_harm <- diat_samples_genus_harm %>%
+  group_by(siteid,sampleid,age,depth,long,lat,genus) %>%
+  summarise(value = sum(value), .groups='drop')
+```
+
+Calculate relative abundance of diatom counts for each `siteid` and `sampleid`
+```{r}
+diat_samples_genus_harm_prop <- diat_samples_genus_harm %>%
+  group_by(siteid, sampleid) %>%
+  mutate(percentage = (value / sum(value, na.rm = TRUE)) * 100) 
+```
+
+# How diatom taxa occupancy change in time?
+```{r}
+#Obtain the most abundant diatom genus in our dataset
+plottingTaxa <- diat_samples_genus_harm_prop %>%
+  group_by(genus) %>%
+  filter(percentage>2) %>%
+  distinct(genus) %>% pull()
+  
+# number of sites for which each genera appears at each time bin
+taxabyage <- diat_samples %>%
+    dplyr::filter(ecologicalgroup == "DIAT") %>% 
+    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), 
+           genus = word(cleaned_name, 1)) %>%
+  filter(genus %in% plottingTaxa) %>% #here we filter from the most frequent diatom genera
+  group_by(genus, "age" = round(age * 2, -3) / 2) %>% #quick trick to group taxa by temporal bins of 500 yr. -3 means rounded to the nearest 1000
+  summarise(n = length(unique(siteid)), .groups = 'keep')
+
+# number of samples for which each taxa appears at each time bin
+samplesbyage <- diat_samples %>% 
+  dplyr::filter(ecologicalgroup == "DIAT") %>% 
+    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), 
+         genus = word(cleaned_name, 1)) %>% 
+  filter(genus %in% plottingTaxa) %>% #here we filter from the most frequent diatom genera
+  group_by("age" = round(age * 2, -3) / 2) %>% 
+  summarise(sites = length(unique(siteid)), .groups = 'keep')
+
+# calculate proportion of occupancy for each genus and time bin
+# for each row, sites mean how many sites have samples at that time bin, and n means number of sites that have samples with that taxon in that time period
+groupbyage <- taxabyage %>%
+  inner_join(samplesbyage, by = "age") %>% 
+  mutate(proportion = n / sites)
+```
+
+Plot the results
+```{r}
+ggplot(groupbyage, aes(x = age, y = proportion)) +
+  geom_point() +
+  geom_smooth(method = 'gam', 
+              method.args = list(family = 'binomial')) +
+  facet_wrap(~genus) +
+  coord_cartesian(xlim = c(20000, 0), ylim = c(0, 1)) +
+  scale_x_reverse(breaks = c(10000, 20000)) +
+  xlab("Age") +
+  theme_article()
+```
+
+
+
+
