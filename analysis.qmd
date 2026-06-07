@@ -20,7 +20,7 @@ format:
     embed-resources: true #to allow portability of html files
 ---
 
-# 1. Workshop overview and objectives
+# Workshop overview and objectives
 
 This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with a simple analysis workflow using `neotoma2` 
 
@@ -35,7 +35,7 @@ This workshop is designed to provide participants at the PalaeOpen Training Scho
 
 1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-stratplots-trainingschool)
 2.  [Neotoma Palaeoecology Database Manual](https://open.neotomadb.org/manual/)
-3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2 (including previous Neotoma workshop repositories)
+3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2), including previous Neotoma workshop repositories
 4.  [PalaeOpen R Zulip channel](https://palaeopen.zulipchat.com/#narrow/channel/540741-it_r)
 5.  [Neotoma Slack channel](https://neotomadb.slack.com/join/shared_invite/zt-cvsv53ep-wjGeCTkq7IhP6eUNA9NxYQ#/shared-invite/email) 
 
@@ -46,7 +46,7 @@ This workflow relies on different R libraries, including tidyverse, geojsonsf an
 ```{r}
 # Clean workspace first
 rm(list = ls())
-install.packages("pacman") #install the package to load the necessary packages
+#install.packages("pacman") #install the package to load the necessary packages
 pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx)
 ```
 
@@ -128,13 +128,13 @@ diatom_data <- diatom_datasets %>%
   neotoma2::get_downloads()
 
 diatom_data # returns the sites information
-neotoma2::cite_data(diatom_data)
+#neotoma2::cite_data(diatom_data)
 ```
 
 In case the Neotoma API doesn't work, we have already downloaded and saved the site data
 ```{r}
 ## The line is commented because there is no need for you to run it
-saveRDS(diatom_data, "data/diatom_download.RDS")
+#saveRDS(diatom_data, "data/diatom_download.RDS")
 ```
 
 To extract all the samples we need to run the funcion `samples()`
