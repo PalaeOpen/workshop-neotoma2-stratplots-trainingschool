@@ -47,7 +47,7 @@ This workflow relies on different R libraries, including tidyverse, geojsonsf an
 # Clean workspace first
 rm(list = ls())
 #install.packages("pacman") #install the package to load the necessary packages
-pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx)
+pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx, terra, geodata)
 ```
 
 # Working with Sites
@@ -187,7 +187,7 @@ diat_samples_genus_harm <- diat_samples %>%
          genus = word(cleaned_name, 1)) 
 ```
 
-Once having created a new grouping variable called **genus** we want to aggregate the counts
+Once having created a new grouping variable called **genus** we need to aggregate the counts:
 ```{r}
 diat_samples_genus_harm <- diat_samples_genus_harm %>%
   group_by(siteid,sampleid,age,depth,long,lat,genus) %>%
@@ -202,6 +202,8 @@ diat_samples_genus_harm_prop <- diat_samples_genus_harm %>%
 ```
 
 # How diatom taxa occupancy change in time?
+We are interested in looking at the distributions of diatom genus across time. Specifically, we want to see how their occupancy (presence/absence) change in time in European lake records. 
+
 ```{r}
 #Obtain the most abundant diatom genus in our dataset
 plottingTaxa <- diat_samples_genus_harm_prop %>%
@@ -241,12 +243,48 @@ ggplot(groupbyage, aes(x = age, y = proportion)) +
   geom_smooth(method = 'gam', 
               method.args = list(family = 'binomial')) +
   facet_wrap(~genus) +
-  coord_cartesian(xlim = c(20000, 0), ylim = c(0, 1)) +
-  scale_x_reverse(breaks = c(10000, 20000)) +
+  coord_cartesian(xlim = c(12000, 0), ylim = c(0, 1)) +
+  scale_x_reverse(breaks = c(5000, 12000)) +
   xlab("Age") +
   theme_article()
 ```
 
+# Linking diatom sites with external raster climatic datasets
+
+One of the advantages of `neotoma2` objects is that they can be easily transformed to spatial objects. R provides a number of tools (in the `sf` and `raster` packages) for managing spatial data, and providing support for spatial analysis of data. 
+
+Let's say we want to extract climatic data and how taxa respond to climatic gradients over time. Here we assume that time is a proxy for changing climatic conditions, the so called **space-for-time substitution**. 
+
+We can get advantage of the available R packages `terra` and `geodata` to get climate data from [WorldClim database](https://www.worldclim.org/data/bioclim.html). Here we pull in the raster data, at a 10 minute resolution for the $T_{max}$ variable, maximum monthly temperature. The raster itself has 12 layers, one for each month. 
+
+```{r}
+worldTmax <- geodata::worldclim_global(var = "tmax", res = 10, path = tempdir())
+```
+
+The next step is to take our diatom sample object and turning it into a spatial object using the `sf` package:
+
+```{r}
+modern <- samples(diatom_data) %>% 
+  filter(age < 1000) %>% 
+  filter(ecologicalgroup == "DIAT" & elementtype == "valve" & units == "NISP")
+
+spatial <- sf::st_as_sf(modern, 
+                        coords = c("long", "lat"),
+                        crs = "+proj=longlat +datum=WGS84")
+```
+
+We convert the diatom spatial object to a `terra` *SpatVector*
+
+```{r}
+spatial_vec <- vect(spatial)
+```
+
+And with the `extract()` function we get information for the seventh month, July.  
+```{r}
+# terra::extract returns a data frame where column 1 is "ID", 
+# so July (the 7th month) is actually the 8th column in the output.
+spatial$tmax7 <- terra::extract(worldTmax, spatial_vec)[, 8]
+```
 
 
 

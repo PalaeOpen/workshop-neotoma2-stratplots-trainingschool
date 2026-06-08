@@ -1,5 +1,5 @@
 ---
-title: "Accessing Paleoecological Data with neotoma2"
+title: "Stratigaphic diagrams"
 subtitle: "PalaeOpen Training School — Sofia, 15–18 June 2026"
 author: "Xavier Benito"
 execute: 
@@ -20,23 +20,15 @@ format:
     embed-resources: true #to allow portability of html files
 ---
 
-# 1. Workshop overview and objectives
-
-This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with an overview of the `neotoma2` R package and its use in obtaining and analysing data from the Neotoma Paleoecology Database.
-
-The workshop combines short conceptual explanations with guided coding exercises using R. We will be using:
-
--   **Prášilské Lake** `Neotoma site ID 26991` [link](https://apps.neotomadb.org/explorer/?siteids=26991)
--   Available datasets for the site: **Pollen**, **diatoms**, **chironomids** & **charcoal**
 
 ## Learning Objectives
 
-1.  Understand the basic data structure within the `neotoma2` R package
+1.  
 7.  Build reproducible workflows using Quarto
 
 ## Online resources
 
-1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool)
+1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-stratplots-trainingschool)
 2.  [Neotoma Palaeoecology Database Manual](https://open.neotomadb.org/manual/)
 3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2 (including previous Neotoma workshop repositories)
 4.  [PalaeOpen R Zulip channel](https://palaeopen.zulipchat.com/#narrow/channel/540741-it_r)
@@ -49,12 +41,12 @@ This workflow relies on different R libraries, including tidyverse, geojsonsf an
 ```{r}
 # Clean workspace first
 rm(list = ls())
-install.packages("pacman") #install the package to load the necessary packages
-pacman::p_load(neotoma2, tidyverse, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx)
+#install.packages("pacman") #install the package to load the necessary packages
+pacman::p_load(neotoma2, tidyverse, tidypaleo, ggplot2, sf, geojsonsf, leaflet, raster, egg, openxlsx, cowplot)
 ```
 
 # Stratigraphic plot
-There exists several packages to perform stratigraphic diagrams of your data. The data needs to be on long or wide format as a funciton of the package used:
+There exists several packages to perform stratigraphic diagrams of your data. The data needs to be on long or wide format as a function of the package used:
 
 | Package | Data structure | function |
 | --------- | ----------- | ----------- |
@@ -64,24 +56,182 @@ There exists several packages to perform stratigraphic diagrams of your data. Th
 | *rioja* | wide format | `strat.plot()`|
 | *riojaPlot* | wide format | `riojaPlot()`|
 
-Here we use the `rioja` package and the `strat.plot` function:
+In this tutorial we will use two different packages: [`tidypaleo`](https://paleolimbot.github.io/tidypaleo/index.html) and [`riojaPlot`](https://nsj3.github.io/riojaPlot_gallery/riojaPlot_Gallery.html#1)
 
+`tidypaleo` can be installed directly from CRAN (`install.packages("tidypaleo)`) and `riojaPlot` is not yet on CRAN. To install it, you can run:
+
+```{r install riojaPlot}
+remotes::install_github("nsj3/riojaPlot", built_vignettes=TRUE, dependencies=TRUE)
+# or
+install.packages("riojaPlot", repos="https://nsj3.r-universe.dev")
+```
+
+As we did in the [intro to neotoma2 workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool), we will use the site **Prášilské jezero**. This site have available datasets for **Pollen**, **diatoms**, **chironomids** & **charcoal**.
+
+We first obtain the site metadata including all its datasets. Then we filter for datasets **Pollen**, **diatoms** and **chironomids**
 ```{r}
-# subset the most frequent taxa from the pollen wide-format matrix
-df_subset <- site_pollen_wide[,-1:-2] %>% 
-  select(any_of(pra_plot_taxa$variablename))
+pra_site <- get_datasets(get_sites(sitename = "Prášilské jezero"), all_data = TRUE) %>%
+  neotoma2::filter(datasettype %in% c("pollen","diatom","chironomid"))
+```
 
-rioja::strat.plot(df_subset*100, yvar = site_pollen_wide$age,
-                          ylabel = "Calibrated Years BP",
-                          xlabel = "Diatom (%)",
-                          y.rev = TRUE,
-                          wa.order = "topleft", scale.percent = TRUE)
+And we extract the sample data:
+```{r}
+pra_rec <- pra_site %>% get_downloads()
+datasets(pra_rec)
+pra_samp <- pra_rec %>% samples()
 
 ```
 
+Let's say we are interested in creating an stratigraphic diagram with the aquatic and terrestrial datasets of the site. 
 
+# Option 1: `tidypaleo`. This package is basically built in `ggplot2` so we need a long-format dataset
 
+## Diatoms
+```{r}
+pra_samp_diat <- samples(pra_rec) %>% 
+  dplyr::filter(ecologicalgroup=="DIAT") %>%
+  dplyr::filter(taxongroup == "Diatoms")
+```
 
+Calculate diatom proportions:
+```{r}
+pra_diat_perc <- pra_samp_diat %>%
+  dplyr::group_by(depth, age) %>%
+  dplyr::mutate(diatcount = sum(value, na.rm = TRUE)) %>%
+  dplyr::group_by(variablename) %>% 
+  dplyr::mutate(relative_abundance_percent = value / diatcount) %>% 
+  dplyr::arrange(desc(age))
+```
+
+Prepare the dataset and plot
+```{r}
+diatoms_long <- pra_diat_perc %>%
+  dplyr::select(depth, age, variablename, relative_abundance_percent) %>% #select the variables of interest from the sample object
+  dplyr::mutate(relative_abundance_percent = as.numeric(relative_abundance_percent)) %>%
+  rename(taxa=variablename) %>% #rename column variablename to taxa
+  mutate(taxa = factor(taxa)) 
+
+levels(diatoms$taxa)
+
+diat_coniss <- diatoms_long %>%
+  as.tibble() %>%
+  nested_data(qualifiers = age, key = taxa, value = relative_abundance_percent) %>%
+  nested_chclust_coniss()
+
+# Here we select the top 15 most abundant diatom taxa
+site_plot_diat <- taxa(pra_rec) %>% dplyr::filter(taxongroup == "Diatoms") %>%
+  dplyr::arrange(desc(samples)) %>% 
+  head(n = 15)
+
+theme_set(theme_bw(base_size=12))
+diat_plot <- diatoms_long %>%
+  filter(taxa %in% site_plot_diat$variablename) %>%
+  ggplot(., aes(x = relative_abundance_percent*100, y = age)) +
+  geom_col_segsh() +
+  scale_y_reverse() +
+  facet_abundanceh(vars(taxa)) +
+  labs(y = "Age (cal yr BP)") 
+diat_plot
+
+diat_coniss_plt <- ggplot() +
+  layer_dendrogram(diat_coniss, aes(y = age)) +
+  scale_y_reverse() +
+  facet_geochem_gridh(vars("CONISS")) +
+  labs(x = NULL)
+
+patchwork::wrap_plots(
+  diat_plot + 
+    theme(strip.background = element_blank(), strip.text.y = element_blank()),
+  diat_coniss_plt +
+    theme(axis.text.y.left = element_blank(), axis.ticks.y.left = element_blank()) +
+    labs(y = NULL),
+  nrow = 1,
+  widths = c(6, 1)
+)
+```
+
+## Pollen
+```{r}
+pra_samp_pollen <- samples(pra_rec) %>% 
+  dplyr::filter(ecologicalgroup==c("TRSH", "UPHE", "VACR")) %>%
+  dplyr::filter(elementtype %in% c("pollen", "spore")) %>%
+  dplyr::filter(units == "NISP") 
+```
+
+Calculate pollen proportions:
+```{r}
+pra_pollen_perc <- pra_samp_pollen %>%
+  dplyr::group_by(depth, age) %>%
+  dplyr::mutate(pollencount = sum(value, na.rm = TRUE)) %>%
+  dplyr::group_by(variablename) %>% 
+  dplyr::mutate(relative_abundance_percent = value / pollencount) %>% 
+  dplyr::arrange(desc(age))
+```
+
+Prepare the dataset and plot
+```{r}
+pollen <- pra_pollen_perc %>%
+  dplyr::select(depth, age, variablename, relative_abundance_percent, ecologicalgroup) %>% #select the variables of interest from the sample object
+  dplyr::mutate(relative_abundance_percent = as.numeric(relative_abundance_percent)) %>%
+  rename(taxa=variablename) %>% #rename column variablename to taxa
+  mutate(taxa = factor(taxa)) 
+
+unique(pollen$taxa)
+unique(pollen$ecologicalgroup)
+
+# Here we select the top 20 most abundant pollen taxa
+site_plot_pollen <- taxa(pra_rec) %>% 
+  dplyr::filter(elementtype %in% c("pollen", "spore")) %>%
+  dplyr::filter(units == "NISP") %>%
+  dplyr::arrange(desc(samples)) %>% 
+  head(n = 20)
+
+theme_set(theme_bw(base_size=12))
+pollen_plot <- pollen %>%
+  filter(taxa %in% site_plot_pollen$variablename) %>%
+  ggplot(., aes(x = relative_abundance_percent*100, y = age, color=ecologicalgroup)) +
+  geom_col_segsh() +
+  scale_y_reverse() +
+  facet_abundanceh(vars(taxa)) +
+  labs(y = "Age (cal yr BP)") 
+pollen_plot
+```
+
+Create a composite plot for diatoms and pollen records
+```{r}
+plot_grid(diat_plot, pollen_plot,
+                            nrow = 1, 
+                            labels = c("Diatoms", "Pollen"), label_size = 12,
+                            rel_widths = c(0.5,0.5), align = "hv") 
+```
+
+# Exercise: add the chironomid diagram next to the diatom stratigraphic plot
+
+## Option 2: `riojaPlot`
+**riojaPlot** package needs a wide-format dataset, so we first take the **diatom** long format table and convert it into a wide table:
+
+```{r}
+pra_diat_wide <- tidyr::pivot_wider(pra_diat_perc,
+                                      id_cols = c(depth, age),
+                                      names_from = variablename,
+                                      values_from = relative_abundance_percent,
+                                      values_fill = 0)
+```
+
+We plot the diatom stratigraphic diagram:
+```{r}
+riojaPlot(pra_diat_wide[,-1:-2]*100, pra_diat_wide[,1:2],
+                       selVars = site_plot_diat$variablename,
+                       scale.percent = TRUE,
+                       sec.yvar.name="age",
+                       plot.sec.axis = TRUE,
+                       srt.xlabel = 60,
+                       xRight = 0.85) 
+```
+
+# Adding multiple proxies with `riojaPlot`
+
+calculate principal curves of pollen data and add it to the diatoms
 
 
 
