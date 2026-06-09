@@ -61,34 +61,36 @@ In this tutorial we will use two different packages: [`tidypaleo`](https://paleo
 `tidypaleo` can be installed directly from CRAN (`install.packages("tidypaleo)`) and `riojaPlot` is not yet on CRAN. To install it, you can run:
 
 ```{r install riojaPlot}
-remotes::install_github("nsj3/riojaPlot", built_vignettes=TRUE, dependencies=TRUE)
-# or
-install.packages("riojaPlot", repos="https://nsj3.r-universe.dev")
+# remotes::install_github("nsj3/riojaPlot", built_vignettes=TRUE, dependencies=TRUE)
+# # or
+# install.packages("riojaPlot", repos="https://nsj3.r-universe.dev")
+
+# load the library
+library(riojaPlot)
 ```
 
-As we did in the [intro to neotoma2 workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool), we will use the site **Prášilské jezero**. This site have available datasets for **Pollen**, **diatoms**, **chironomids** & **charcoal**.
+As we did in the [intro to neotoma2 workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool), we will use the site **Prášilské jezero**. 
 
-We first obtain the site metadata including all its datasets. Then we filter for datasets **Pollen**, **diatoms** and **chironomids**
+We first obtain the site metadata including all its datasets. Then we filter for **pollen** and **diatoms** datasets.
 ```{r}
 pra_site <- get_datasets(get_sites(sitename = "Prášilské jezero"), all_data = TRUE) %>%
-  neotoma2::filter(datasettype %in% c("pollen","diatom","chironomid"))
+  neotoma2::filter(datasettype %in% c("pollen","diatom"))
 ```
 
-And we extract the sample data:
+Now we extract the records and the samples:
 ```{r}
-pra_rec <- pra_site %>% get_downloads()
-datasets(pra_rec)
-pra_samp <- pra_rec %>% samples()
-
+pra_records <- pra_site %>% get_downloads()
+datasets(pra_records)
+pra_samp <- pra_records %>% samples()
 ```
 
-Let's say we are interested in creating an stratigraphic diagram with the aquatic and terrestrial datasets of the site. 
+We are interested in creating an stratigraphic diagram with the aquatic and terrestrial datasets of the site. We are going to use two packages.
 
 # Option 1: `tidypaleo`. This package is basically built in `ggplot2` so we need a long-format dataset
 
 ## Diatoms
 ```{r}
-pra_samp_diat <- samples(pra_rec) %>% 
+pra_samp_diat <- samples(pra_records) %>% 
   dplyr::filter(ecologicalgroup=="DIAT") %>%
   dplyr::filter(taxongroup == "Diatoms")
 ```
@@ -111,15 +113,11 @@ diatoms_long <- pra_diat_perc %>%
   rename(taxa=variablename) %>% #rename column variablename to taxa
   mutate(taxa = factor(taxa)) 
 
-levels(diatoms$taxa)
-
-diat_coniss <- diatoms_long %>%
-  as.tibble() %>%
-  nested_data(qualifiers = age, key = taxa, value = relative_abundance_percent) %>%
-  nested_chclust_coniss()
+levels(diatoms_long$taxa) #check which diatom taxa we have
 
 # Here we select the top 15 most abundant diatom taxa
-site_plot_diat <- taxa(pra_rec) %>% dplyr::filter(taxongroup == "Diatoms") %>%
+site_plot_diat <- taxa(pra_records) %>% 
+  dplyr::filter(taxongroup == "Diatoms") %>%
   dplyr::arrange(desc(samples)) %>% 
   head(n = 15)
 
@@ -127,18 +125,52 @@ theme_set(theme_bw(base_size=12))
 diat_plot <- diatoms_long %>%
   filter(taxa %in% site_plot_diat$variablename) %>%
   ggplot(., aes(x = relative_abundance_percent*100, y = age)) +
-  geom_col_segsh() +
+  geom_col_segsh(linewidth = 1.2) +
   scale_y_reverse() +
   facet_abundanceh(vars(taxa)) +
   labs(y = "Age (cal yr BP)") 
 diat_plot
+```
+
+Have a look a the diatom plot. You can change plotting parameters adjusting arguments in `geom_col_segsh`.
+Also, you can add or remove certain taxa:
+
+```{r}
+site_plot_diat_aul <- taxa(pra_records) %>% 
+  dplyr::filter(taxongroup == "Diatoms") %>%
+  dplyr::filter(variablename == "Aulacoseira ambigua") %>%
+  bind_rows(site_plot_diat)
+
+# Re-do the diagram
+diat_plot <- diatoms_long %>%
+  filter(taxa %in% site_plot_diat_aul$variablename) %>%
+  ggplot(., aes(x = relative_abundance_percent*100, y = age)) +
+  geom_col_segsh(linewidth = 1.2) +
+  scale_y_reverse() +
+  facet_abundanceh(vars(taxa)) +
+  labs(y = "Age (cal yr BP)") 
+diat_plot
+
+```
+
+It is a common practice to find stratigraphic significant zones in the diatom dataset at the right of the abundance plots, and identify them using **cluster** analysis. 
+`tidypaleo` uses the `rioja` package to the CONISS (constrained cluster analysis). The number of statistically significant zones is calculated by default based on a broken stick simulation.
+
+```{r}
+diat_coniss <- diatoms_long %>%
+  as.tibble() %>%
+  nested_data(qualifiers = age, key = taxa, value = relative_abundance_percent) %>%
+  nested_chclust_coniss()
 
 diat_coniss_plt <- ggplot() +
   layer_dendrogram(diat_coniss, aes(y = age)) +
   scale_y_reverse() +
   facet_geochem_gridh(vars("CONISS")) +
   labs(x = NULL)
+```
 
+We combine the two plots (diatom diagram and CONISS) using the `patchwork` package. Use this option when the values between cores vary so significantly that plotting them on a single axis obscures the trends. Additionally, employ this method if you must display both ages and depths for multiple plots.
+```{r}
 patchwork::wrap_plots(
   diat_plot + 
     theme(strip.background = element_blank(), strip.text.y = element_blank()),
@@ -152,7 +184,7 @@ patchwork::wrap_plots(
 
 ## Pollen
 ```{r}
-pra_samp_pollen <- samples(pra_rec) %>% 
+pra_samp_pollen <- samples(pra_records) %>% 
   dplyr::filter(ecologicalgroup==c("TRSH", "UPHE", "VACR")) %>%
   dplyr::filter(elementtype %in% c("pollen", "spore")) %>%
   dplyr::filter(units == "NISP") 
@@ -180,7 +212,7 @@ unique(pollen$taxa)
 unique(pollen$ecologicalgroup)
 
 # Here we select the top 20 most abundant pollen taxa
-site_plot_pollen <- taxa(pra_rec) %>% 
+site_plot_pollen <- taxa(pra_records) %>% 
   dplyr::filter(elementtype %in% c("pollen", "spore")) %>%
   dplyr::filter(units == "NISP") %>%
   dplyr::arrange(desc(samples)) %>% 
@@ -192,12 +224,13 @@ pollen_plot <- pollen %>%
   ggplot(., aes(x = relative_abundance_percent*100, y = age, color=ecologicalgroup)) +
   geom_col_segsh() +
   scale_y_reverse() +
-  facet_abundanceh(vars(taxa)) +
-  labs(y = "Age (cal yr BP)") 
+  facet_abundanceh(vars(taxa), ) +
+  labs(y = "Age (cal yr BP)") +
+  theme(legend.position = "bottom")
 pollen_plot
 ```
 
-Create a composite plot for diatoms and pollen records
+Create a composite plot for diatoms and pollen records:
 ```{r}
 plot_grid(diat_plot, pollen_plot,
                             nrow = 1, 
@@ -205,10 +238,11 @@ plot_grid(diat_plot, pollen_plot,
                             rel_widths = c(0.5,0.5), align = "hv") 
 ```
 
-# Exercise: add the chironomid diagram next to the diatom stratigraphic plot
+# Exercise 1: Have a look at the composite diagram and make changes to make it "printable". For instance, the y-axis (age scale) of the pollen diagram might not be necessary, and the angle of the species label (see argument `rotate_facet_labels` in `facet_abundanceh()`)
+# Exercise 2: add the chironomid diagram next to the diatom stratigraphic plot
 
 ## Option 2: `riojaPlot`
-**riojaPlot** package needs a wide-format dataset, so we first take the **diatom** long format table and convert it into a wide table:
+**riojaPlot** package needs a wide-format dataset, so we first take the **diatom** long-format proportions table and convert it into a wide table:
 
 ```{r}
 pra_diat_wide <- tidyr::pivot_wider(pra_diat_perc,
@@ -228,6 +262,22 @@ riojaPlot(pra_diat_wide[,-1:-2]*100, pra_diat_wide[,1:2],
                        srt.xlabel = 60,
                        xRight = 0.85) 
 ```
+
+`riojaPlot` can add zonation to the stratigraphic diagram. The easiest way is with the arguments `do.clust=TRUE` to create the zonation, and `plot.clust=TRUE` to add the dendrogram.
+```{r}
+riojaPlot(pra_diat_wide[,-1:-2]*100, pra_diat_wide[,1:2],
+                       selVars = site_plot_diat$variablename,
+                       scale.percent = TRUE,
+                       sec.yvar.name="age",
+                       plot.sec.axis = TRUE,
+                       do.clust=TRUE,
+                       plot.clust=TRUE,
+                       plot.zones="auto",
+                       srt.xlabel = 60,
+                       xRight = 0.85) 
+```
+
+
 
 # Adding multiple proxies with `riojaPlot`
 

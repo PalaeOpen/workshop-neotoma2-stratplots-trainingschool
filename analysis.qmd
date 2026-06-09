@@ -110,10 +110,9 @@ diatom_cont_sites <- diatom_sites %>%
 
 A `sites` object contains `collectionunits` which contain `datasets`. From the table above we can see that some of the sites we have looked at contain different `dataset` types. We can also see that for each site, different `collectionunits` (i.e., usually cores) can be found. 
 
-Having a `sites` object we can directly call `get_datasets()` to pull in more metadata about the datasets. At any time we can use `datasets()` to get more information about any datasets that a sites object may contain. Below we compare the output of `datasets(bulgaria_sites)` to the output of a similar call using the following:
+Having a `sites` object we can directly call `get_datasets()` to pull in more metadata about the datasets. At any time we can use `datasets()` to get more information about any datasets that a sites object may contain. Below we get the diatom datasets from the diatom continental sites and see the summary of the them (`sitename`, `collectionunit`)
 
 ```{r}
-datasets(diatom_cont_sites)
 diatom_datasets <- get_datasets(diatom_cont_sites)
 neotoma2::summary(diatom_datasets)
 
@@ -126,8 +125,6 @@ Functions like `get_sites()` or `get_datasets()` only pull down high-level metad
 ```{r}
 diatom_data <- diatom_datasets %>%
   neotoma2::get_downloads()
-
-diatom_data # returns the sites information
 #neotoma2::cite_data(diatom_data)
 ```
 
