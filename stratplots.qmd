@@ -22,9 +22,9 @@ format:
 
 
 ## Learning Objectives
-
-1.  
-7.  Build reproducible workflows using Quarto
+1.  Obtain sample information for the selected sites and datasets
+2.  Structure sample data for stratigraphic plotting and customize diagrams
+3.  Build reproducible workflows using Quarto
 
 ## Online resources
 
@@ -71,7 +71,7 @@ library(riojaPlot)
 
 As we did in the [intro to neotoma2 workshop](https://github.com/PalaeOpen/workshop-neotoma2-trainingschool), we will use the site **Prášilské jezero**. 
 
-We first obtain the site metadata including all its datasets. Then we filter for **pollen** and **diatoms** datasets.
+We first obtain the site metadata including the site's datasets. Then we filter for **pollen** and **diatoms** datasets.
 ```{r}
 pra_site <- get_datasets(get_sites(sitename = "Prášilské jezero"), all_data = TRUE) %>%
   neotoma2::filter(datasettype %in% c("pollen","diatom"))
