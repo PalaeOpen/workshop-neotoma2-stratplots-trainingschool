@@ -83,7 +83,7 @@ europe <- list(geoJSON = '{"type": "Polygon",
             [-30, 90],
             [-30, 30]]]}')
 
-diatom_sites <- get_sites(datasettype="diatom", loc=europe$geoJSON) #if all_data = TRUE all available records will be queried.
+diatom_sites <- get_sites(datasettype="diatom", loc=europe$geoJSON) #if all_data = TRUE all available records will be queried. By default only 25 records will be obtained
 neotoma2::plotLeaflet(diatom_sites)
 #neotoma2::summary(diatom_sites)
 ```
