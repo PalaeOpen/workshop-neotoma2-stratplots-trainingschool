@@ -1,7 +1,7 @@
 ---
 title: "Simple analysis workflow"
-subtitle: "PalaeOpen Training School — Sofia, 15–18 June 2026"
-author: "Xavier Benito"
+subtitle: "PalaeOpen Training School — Sofia, 18 June 2026"
+author: "Xavier Benito (with support from Neotoma materials)"
 execute: 
   echo: true
   warning: false
@@ -22,13 +22,13 @@ format:
 
 # Workshop overview and objectives
 
-This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with a simple analysis workflow using `neotoma2` 
+This workshop is designed to provide participants at the PalaeOpen Training School (Sofia, 15–19 June 2026) with a simple analysis workflow using `neotoma2` package
 
 ## Learning Objectives
 
 1.  Perform basic taxonomic harmonization
 2.  Make a simple analyses of spatial distribution of taxa over time
-3.  Conduct large-scale analyses of taxa distribution against raster data
+3.  Conduct spatial analyses of taxa distribution against climatic raster data
 4.  Build reproducible workflows using Quarto
 
 ## Online resources
@@ -88,7 +88,7 @@ neotoma2::plotLeaflet(diatom_sites)
 #neotoma2::summary(diatom_sites)
 ```
 
-There seems to be some marine sites in the European diatom site list. Let's have a look at the description field of each site and store it into a list:
+Looking at the map, there seems to be some marine sites in the European diatom site list. Let's have a look at the description field of each site and store it into a list:
 ```{r}
 locs <- list()
 for (i in 1:length(diatom_sites)) {
@@ -98,7 +98,7 @@ for (i in 1:length(diatom_sites)) {
 locs
 ```
 
-However, we have NAs for all the sites' description so we need to remove them manually.
+Unfortunately, we have NAs for all the sites' description so we need to remove them manually.
 ```{r}
 marine_sites_vec <- c(30451,30452,30453,30454,30614, 30983) #we define first the vector with the siteid to be removed
 diatom_cont_sites <- diatom_sites %>% 
@@ -106,9 +106,10 @@ diatom_cont_sites <- diatom_sites %>%
 ```
 
 # Working with datasets
+
 A `sites` object contains `collectionunits` which contain `datasets`. From the `diatom_cont_sites` object we can see if some of the sites we have looked at contain different`collectionunits` (i.e., usually cores). 
 
-Having a `sites` object we can directly call `get_datasets()` to pull in more metadata about the datasets. At any time we can use `datasets()` to get more information about any datasets that a sites object may contain. Below we get the diatom datasets from the diatom continental sites and see the summary of the them (`sitename`, `collectionunit`)
+Having a `sites` object we can directly call `get_datasets()` to pull in more metadata about the datasets. At any time we can use `datasets()` to get more information about any datasets that a sites object may contain. Below we get the diatom datasets from the diatom continental sites object and see the summary of the them (`sitename`, `collectionunit`)
 
 ```{r}
 diatom_datasets <- get_datasets(diatom_cont_sites)
@@ -116,45 +117,30 @@ neotoma2::summary(diatom_datasets)
 ```
 
 # Working with samples
+
 Functions like `get_sites()` or `get_datasets()` only pull down high-level metadata (site names, geographic coordinates, dataset IDs, etc) to keep things fast and avoid large files quering the API. To populate that object with the detailed data—like analysis units, sample depth, chronologies, and taxon counts, we need to pass it into the `get_downloads()` function.
 
 ```{r}
 diatom_data <- diatom_datasets %>%
-  neotoma2::get_downloads()
+  neotoma2::get_downloads() 
 #neotoma2::cite_data(diatom_data)
 ```
 
-In case the Neotoma API doesn't work, we have already downloaded and saved the site data
-```{r}
-## The line is commented because there is no need for you to run it
-#saveRDS(diatom_data, "data/diatom_download.RDS")
-```
-
-To extract all the samples we need to run the funcion `samples()`
-```{r}
-#diatom_data <- readRDS("data/diatom_download.RDS") #uncomment if you need to read in the downloaded object (diatom datasets)
-diat_samples <- samples(diatom_data)
-names(diat_samples)
-```
-
 # Simple taxonomic harmonization
-Diatoms are notorious for their species-rich fossil assemblages and convoluted taxonomy characterized by constant nomenclature changes and taxa having different synonyms for the same species.
+
+Diatoms are notorious for their species-rich assemblages and convoluted taxonomy characterized by constant nomenclature changes and taxa having different synonyms for the same species.
 
 If you want to know what diatom taxa we have in the samples, you can use the function `taxa()` on the downloaded data object. This is basically the samples table with information about how many samples the taxon occurs, and in how many sites.
 
+You can also save the final taxon list with a .xlsx (or .csv) file so we can edit it subsequently, for instance to add diatom traits (e.g., benthic and planktic) or other fine-tuning name changes
 ```{r}
-diatom_taxa <- neotoma2::taxa(diatom_data)
-head(diatom_taxa) #have a look at the diatom taxon table
+diatom_taxa <- diatom_data %>%
+  neotoma2::taxa()
 ```
 
 Let's say we want all samples from which *Achnanthidium minutissimum* and its related taxa (*Achnanthes minutissima*, *Achnanthidium minutissimum s.l.*) and also uncertain taxa (*Achnanthidium cf. A. minutissimum*) have been reported to be grouped together into one taxon called *Achnanthidium minutissimum*. There are several ways of doing this, either directly by exporting the file and editing each individual cell, or by creating an external “harmonization” table.
 
-```{r}
-# Save the taxon list with a .csv file so we can edit it subsequently, for instance to add diatom traits (e.g., benthic and planktic) or other fine-tuning taxonomic harmonization
-openxlsx::write.xlsx(diatom_taxa, "data/diatomtaxontable.csv")
-```
-
-We can harmonize taxon by taxon using matching and transformation. We use `dplyr` type coding here to `mutate()` the column `variablename` so that any time we detect (`str_detect()`) a `variablename` that has *minutissima* we replace() it with the character string "Achnanthidium minutissimum". 
+We can harmonize taxon by taxon using matching and transformation. We use `dplyr` type coding here to `mutate()` the column `variablename` so that any time we detect (`str_detect()`) a `variablename` that has *minutissima* we `replace()` it with the character string **Achnanthidium minutissimum**. 
 
 ```{r}
 taxon_detect <- "minutissimum"
@@ -165,7 +151,8 @@ diatom_taxa %>% #how many different diatom taxa have "minutissimum"
 
 First, we are going to filter the ecological groups to include only DIAT (diatom) and then replace the diatom name changed.
 ```{r}
-diat_samples_harm <- diat_samples %>% 
+diat_samples_harm <- diatom_data %>% 
+  neotoma2::samples() %>%
   dplyr::filter(ecologicalgroup == "DIAT") %>% #we filter by diatoms because there might exists other taxa in the datasets that have "minutissimum" as name. This would also allow us to ignore things that might skew our diatom sums, for instance cysts
   mutate(variablename = replace(variablename, 
                                 stringr::str_detect(variablename, taxon_detect), 
@@ -174,10 +161,11 @@ diat_samples_harm <- diat_samples %>%
 
 Imagine now that we are interested in harmonizing our diatom taxon list by genus. To do that we apply `stringr::word()` to isolate the first word. 
 ```{r}
-diat_samples_genus_harm <- diat_samples %>%
+diat_samples_genus_harm <- diatom_data %>% 
+  neotoma2::samples() %>%
     dplyr::filter(ecologicalgroup == "DIAT") %>% #we filter by diatoms only
-    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), #rmeove designations like "Unknown diatom" or cf. variants (e.g., "cf. Navicula"), otherwise taking the first word will result in a genus named "Unknown" or "cf."
-         genus = word(cleaned_name, 1)) 
+    mutate(cleaned_name = str_remove(variablename, "^cf|aff\\.\\s+"), #remove designations like variants (e.g., "cf. Navicula"), otherwise taking the first word will result in a genus named "cf.". 
+         genus = word(cleaned_name, 1)) #take the first word of the variable name, i.e., genus
 ```
 
 Once having created a new grouping variable called **genus** we need to aggregate the counts:
@@ -205,18 +193,20 @@ plottingTaxa <- diat_samples_genus_harm_prop %>%
   distinct(genus) %>% pull()
   
 # number of sites for which each genera appears at each time bin
-taxabyage <- diat_samples %>%
-    dplyr::filter(ecologicalgroup == "DIAT") %>% 
-    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), 
+taxabyage <- diatom_data %>% 
+  neotoma2::samples() %>%
+  dplyr::filter(ecologicalgroup == "DIAT") %>% 
+  mutate(cleaned_name = str_remove(variablename, "^cf|aff\\.\\s+"), 
            genus = word(cleaned_name, 1)) %>%
   filter(genus %in% plottingTaxa) %>% #here we filter from the most frequent diatom genera
   group_by(genus, "age" = round(age * 2, -3) / 2) %>% #quick trick to group taxa by temporal bins of 500 yr. -3 means rounded to the nearest 1000
   summarise(n = length(unique(siteid)), .groups = 'keep')
 
 # number of samples for which each taxa appears at each time bin
-samplesbyage <- diat_samples %>% 
+samplesbyage <- diatom_data %>% 
+  neotoma2::samples() %>%
   dplyr::filter(ecologicalgroup == "DIAT") %>% 
-    mutate(cleaned_name = str_remove(variablename, "^cf\\.\\s+"), 
+    mutate(cleaned_name = str_remove(variablename, "^cf|aff\\.\\s+"), 
          genus = word(cleaned_name, 1)) %>% 
   filter(genus %in% plottingTaxa) %>% #here we filter from the most frequent diatom genera
   group_by("age" = round(age * 2, -3) / 2) %>% 
@@ -243,6 +233,7 @@ ggplot(groupbyage, aes(x = age, y = proportion)) +
 ```
 
 # Linking diatom sites with external raster climatic datasets
+
 One of the advantages of `neotoma2` objects is that they can be easily transformed to spatial objects. R provides a number of tools (in the `sf` and `raster` packages) for managing spatial data, and providing support for spatial analysis of data. 
 
 Let's say we want to extract climatic data and explore how taxa respond to climatic gradients over time. Here we assume that space is a proxy for changing climatic conditions in time, the so called **space-for-time substitution**. 
@@ -251,12 +242,15 @@ We can get advantage of the available R packages `terra` and `geodata` to get cl
 
 ```{r}
 worldTmax <- geodata::worldclim_global(var = "tmax", res = 10, path = tempdir())
-plot(worldTmax) #to see the maximum temperature for each 12 months
+plot(worldTmax) #to see the maximum temperature for each of the 12 months
+
+# Here I have saved the the raster file "wordTmax" to have it handy in the folder
+#terra::writeRaster(worldTmax, "data/worldTmax.tif", overwrite = TRUE)
 ```
 
 If you type `?geodata` you can see the different raster layers you can pull in. 
 
-The next step is to take our diatom sample object harmonized by genus and turning it into a spatial object using the `sf` package. We filter samples for the last 1000 years.
+The next step is to take our diatom sample object harmonized by genus and turning it into a spatial object using the `sf` package. We filter diatom samples for the last 1000 years.
 
 ```{r}
 modern <- diat_samples_genus_harm %>% 
@@ -269,13 +263,16 @@ spatial <- sf::st_as_sf(modern,
 
 We convert the diatom spatial object to a `terra` *SpatVector*
 ```{r}
-spatial_vec <- vect(spatial)
+spatial_vec <- terra::vect(spatial)
 ```
 
 And with the `extract()` function we get information for the seventh month, July.  
 ```{r warning=FALSE}
 # terra::extract returns a data frame where column 1 is "ID", 
-# so July (the 7th month) is actually the 8th column in the output. You can see the worldtmax table coding (terra::extract(worldTmax, spatial_vec))
+# so July (the 7th month) is actually the 8th column in the output. 
+
+# if you need to read in the wordTmax raster file from the saved file:
+#worldTmax <- rast("data/worldTmax.tif")
 spatial$tmax7 <- terra::extract(worldTmax, spatial_vec)[, 8]
 ```
 
@@ -286,7 +283,7 @@ spatial <- spatial %>%
   group_by(genus, siteid) %>% 
   summarise(tmax7 = max(tmax7), .groups = "keep") %>%
   group_by(genus) %>% 
-  filter(n() > 2) #genera that appears more than 2 times in the dataset
+  filter(n() > 1) #genera that appears in at least 1 site in the dataset
 head(spatial)
 ```
 
@@ -301,9 +298,11 @@ ggplot() +
   theme_article()
 ```
 
-With only three sites in the diatom dataset, this plot is not useful at all. The most abundant diatom genera in our dataset are located in the three sites across the very same climatic gradient. 
+# Conclusion
 
-Imagine you have more sites geographically spread out in Europe to start seeing different patterns. The basics here is that we can overlay Neotoma datasets with external rasters, not only temperature but also elevation, landcover, or human footprint data. The template of this workflow can be adjusted to specific analysis, for instance using the package [`rpaleoclim`](https://cran.r-project.org/web/packages/rpaleoclim/index.html) to pull out paleoclimatic data.
+With only three sites in the diatom dataset, this plot is not useful at all I'm afraid. The most abundant diatom genera in our dataset are located in the three sites across the very same climatic gradient. Imagine you have more sites geographically spread out in Europe to start seeing different patterns. The basics here is that we can overlay Neotoma datasets with external rasters, not only temperature but also elevation, land cover, or human footprint data. The template of this workflow can be adjusted to specific analysis, for instance using the package [`rpaleoclim`](https://cran.r-project.org/web/packages/rpaleoclim/index.html) to pull out paleoclimatic time series data.
+
+
 
 
 
