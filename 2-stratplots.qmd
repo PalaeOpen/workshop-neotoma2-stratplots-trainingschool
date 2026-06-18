@@ -30,7 +30,7 @@ format:
 
 1.  [Code repository for the workshop](https://github.com/PalaeOpen/workshop-neotoma2-stratplots-trainingschool)
 2.  [Neotoma Palaeoecology Database Manual](https://open.neotomadb.org/manual/)
-3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2 (including previous Neotoma workshop repositories)
+3.  [neotoma2 GitHub Repository](https://github.com/neotomadb/neotoma2) including previous Neotoma workshop repositories
 4.  [PalaeOpen R Zulip channel](https://palaeopen.zulipchat.com/#narrow/channel/540741-it_r)
 5.  [Neotoma Slack channel](https://neotomadb.slack.com/join/shared_invite/zt-cvsv53ep-wjGeCTkq7IhP6eUNA9NxYQ#/shared-invite/email) 
 
@@ -86,7 +86,8 @@ pra_samp <- pra_records %>% samples()
 
 We are interested in creating an stratigraphic diagram with the aquatic and terrestrial datasets of the site. We are going to use two packages.
 
-# Option 1: `tidypaleo`. This package is basically built in `ggplot2` so we need a long-format dataset
+# Option 1: `tidypaleo`
+This package is basically built in `ggplot2` so we need a long-format dataset
 
 ## Diatoms
 ```{r}
@@ -220,7 +221,7 @@ site_plot_pollen <- taxa(pra_records) %>%
   head(n = 20)
 
 theme_set(theme_bw(base_size=12))
-pollen_plot <- pollen %>%
+pollen_plot <- pollen_long %>%
   filter(taxa %in% site_plot_pollen$variablename) %>%
   ggplot(., aes(x = relative_abundance_percent*100, y = age, color=ecologicalgroup)) +
   geom_col_segsh() +
@@ -239,10 +240,13 @@ plot_grid(diat_plot, pollen_plot,
                             rel_widths = c(0.5,0.5), align = "hv") 
 ```
 
-# Exercise 1: Have a look at the composite diagram and make changes to make it "printable". For instance, the y-axis (age scale) of the pollen diagram might not be necessary, and the angle of the species label (see argument `rotate_facet_labels` in `facet_abundanceh()`)
-# Exercise 2: Place the chironomid diagram next to the diatom stratigraphic plot to facilitate comparison of downcore changes in the wider aquatic assemblage.
+## Exercise 1
+Have a look at the composite diagram and make changes to make it "printable". For instance, the y-axis (age scale) of the pollen diagram might not be necessary, and the angle of the species label (see argument `rotate_facet_labels` in `facet_abundanceh()`)
 
-## Option 2: `riojaPlot`
+## Exercise 2
+Place the chironomid diagram next to the diatom stratigraphic plot to facilitate comparison of downcore changes in the wider aquatic assemblage.
+
+# Option 2: `riojaPlot`
 **riojaPlot** package needs a wide-format dataset, so we first take the **diatom** long-format proportions table and convert it into a wide table:
 
 ```{r}
